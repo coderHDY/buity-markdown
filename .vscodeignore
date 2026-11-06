@@ -1,0 +1,17 @@
+.vscode/**
+.vscode-test/**
+src/**
+webview/**
+scripts/**
+node_modules/**
+out/**
+dist/smoke.cjs
+dist/engine-test.cjs
+*.map
+*.ts
+!media/**/*.js
+tsconfig.json
+package-lock.json
+.eslintrc*
+.gitignore
+**/.DS_Store

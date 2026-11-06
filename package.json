@@ -1,0 +1,283 @@
+{
+  "name": "buity-markdown",
+  "displayName": "Buity Markdown",
+  "description": "A beautiful markdown editor & live preview — editorial typography, callouts, math, diagrams, outline navigation and one-click export.",
+  "version": "0.1.0",
+  "publisher": "buity",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Formatters",
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "markdown",
+    "preview",
+    "live preview",
+    "mermaid",
+    "katex",
+    "notes",
+    "writing"
+  ],
+  "galleryBanner": {
+    "color": "#12141a",
+    "theme": "dark"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onWebviewPanel:buityMarkdown.preview"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "buityMarkdown.openPreview",
+        "title": "Open Preview",
+        "category": "Buity Markdown",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "buityMarkdown.openPreviewToSide",
+        "title": "Open Preview to the Side",
+        "category": "Buity Markdown",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "buityMarkdown.exportHtml",
+        "title": "Export as Standalone HTML",
+        "category": "Buity Markdown",
+        "icon": "$(export)"
+      },
+      {
+        "command": "buityMarkdown.toggleBold",
+        "title": "Toggle Bold",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.toggleItalic",
+        "title": "Toggle Italic",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.toggleStrike",
+        "title": "Toggle Strikethrough",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.toggleInlineCode",
+        "title": "Toggle Inline Code",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.toggleHighlight",
+        "title": "Toggle Highlight",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.toggleLink",
+        "title": "Insert / Remove Link",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.cycleHeading",
+        "title": "Cycle Heading Level",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.toggleTask",
+        "title": "Toggle Task Checkbox",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.insertCallout",
+        "title": "Insert Callout",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.insertTable",
+        "title": "Insert Table",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.insertMermaid",
+        "title": "Insert Diagram (Mermaid)",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.insertMath",
+        "title": "Insert Math Block",
+        "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.insertCodeBlock",
+        "title": "Insert Code Block",
+        "category": "Buity Markdown"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "buityMarkdown.openPreviewToSide",
+        "key": "ctrl+k b",
+        "mac": "cmd+k b",
+        "when": "editorLangId == markdown"
+      },
+      {
+        "command": "buityMarkdown.exportHtml",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e",
+        "when": "editorLangId == markdown"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "buityMarkdown.openPreviewToSide",
+          "when": "editorLangId == markdown",
+          "group": "navigation"
+        },
+        {
+          "command": "buityMarkdown.exportHtml",
+          "when": "editorLangId == markdown",
+          "group": "1_buity"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "buityMarkdown.insertCallout",
+          "when": "editorLangId == markdown",
+          "group": "buity@1"
+        },
+        {
+          "command": "buityMarkdown.insertTable",
+          "when": "editorLangId == markdown",
+          "group": "buity@2"
+        },
+        {
+          "command": "buityMarkdown.insertMermaid",
+          "when": "editorLangId == markdown",
+          "group": "buity@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Buity Markdown",
+      "properties": {
+        "buityMarkdown.theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "paper",
+            "midnight"
+          ],
+          "enumDescriptions": [
+            "Follow the current VS Code color theme",
+            "Warm paper-like light theme",
+            "Deep midnight dark theme"
+          ],
+          "default": "auto",
+          "description": "Preview appearance."
+        },
+        "buityMarkdown.fontSize": {
+          "type": "number",
+          "default": 16,
+          "minimum": 11,
+          "maximum": 28,
+          "description": "Base text size of the preview (px)."
+        },
+        "buityMarkdown.lineHeight": {
+          "type": "number",
+          "default": 1.75,
+          "minimum": 1.2,
+          "maximum": 2.4,
+          "description": "Line height of the preview."
+        },
+        "buityMarkdown.width": {
+          "type": "string",
+          "enum": [
+            "narrow",
+            "comfortable",
+            "wide",
+            "full"
+          ],
+          "default": "comfortable",
+          "description": "Reading column width."
+        },
+        "buityMarkdown.showOutline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the outline (table of contents) in the sidebar."
+        },
+        "buityMarkdown.syncScroll": {
+          "type": "boolean",
+          "default": true,
+          "description": "Synchronize scrolling between the editor and the preview."
+        },
+        "buityMarkdown.mermaid": {
+          "type": "boolean",
+          "default": true,
+          "description": "Render ```mermaid code blocks as diagrams."
+        },
+        "buityMarkdown.math": {
+          "type": "boolean",
+          "default": true,
+          "description": "Render TeX math with KaTeX."
+        },
+        "buityMarkdown.callouts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Render ::: tip / ::: warning style callouts in the built-in preview."
+        },
+        "buityMarkdown.wordCount": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show word / character count in the status bar for markdown files."
+        },
+        "buityMarkdown.readingTime": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include an estimated reading time in the status bar tooltip."
+        }
+      }
+    },
+    "markdown.previewStyles": [
+      "./media/katex.css",
+      "./media/buity.css"
+    ],
+    "markdown.markdownItPlugins": true,
+    "snippets": [
+      {
+        "language": "markdown",
+        "path": "./snippets/markdown.json"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run build && vsce package",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.22",
+    "markdown-it": "^14.1.0",
+    "markdown-it-footnote": "^4.0.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "sanitize-html": "^2.17.0"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.10.2",
+    "@types/sanitize-html": "^2.13.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.2",
+    "mermaid": "^11.4.1",
+    "typescript": "^5.7.2"
+  }
+}

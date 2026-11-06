@@ -1,0 +1,53 @@
+{
+  "Buity callout": {
+    "prefix": ["callout", "buity-callout"],
+    "body": ["::: ${1|note,tip,important,warning,caution,example,quote|} ${2:Title}", "$0", "::: "],
+    "description": "Buity Markdown callout block"
+  },
+  "Buity GitHub alert": {
+    "prefix": ["alert", "buity-alert"],
+    "body": ["> [!${1|NOTE,TIP,IMPORTANT,WARNING,CAUTION|}]", "> $0"],
+    "description": "GitHub style alert"
+  },
+  "Buity table": {
+    "prefix": ["table", "buity-table"],
+    "body": [
+      "| ${1:Column 1} | ${2:Column 2} | ${3:Column 3} |",
+      "| --- | --- | --- |",
+      "| ${4:} | ${5:} | ${6:} |",
+      "| ${7:} | ${8:} | ${9:} |",
+      "$0"
+    ],
+    "description": "3 column table"
+  },
+  "Buity diagram": {
+    "prefix": ["mermaid", "diagram", "buity-diagram"],
+    "body": ["```mermaid", "flowchart ${1|LR,TB,RL,BT|}", "  A[${2:Start}] --> B[${3:End}]", "```", "$0"],
+    "description": "Mermaid diagram"
+  },
+  "Buity math block": {
+    "prefix": ["math", "katex", "buity-math"],
+    "body": ["$$", "$1", "$$", "$0"],
+    "description": "KaTeX display math"
+  },
+  "Buity details": {
+    "prefix": ["details", "buity-details"],
+    "body": ["<details>", "<summary>${1:Click to expand}</summary>", "", "$0", "", "</details>"],
+    "description": "Collapsible section"
+  },
+  "Buity front matter": {
+    "prefix": ["frontmatter", "buity-frontmatter"],
+    "body": ["---", "title: ${1:Untitled}", "date: ${CURRENT_YEAR}-${CURRENT_MONTH}-${CURRENT_DATE}", "tags: []", "---", "$0"],
+    "description": "YAML front matter"
+  },
+  "Buity figure": {
+    "prefix": ["figure", "buity-figure"],
+    "body": ["![${1:Alt text}](${2:./image.png})", "", "*${3:Caption}*", "$0"],
+    "description": "Image with caption"
+  },
+  "Buity task list": {
+    "prefix": ["tasks", "buity-tasks"],
+    "body": ["- [ ] ${1:First task}", "- [ ] ${2:Second task}", "- [x] ${3:Done}", "$0"],
+    "description": "Task list"
+  }
+}
