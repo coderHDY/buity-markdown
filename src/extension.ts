@@ -3,6 +3,7 @@ import { BuityPreview } from './preview';
 import { countText, extendMarkdownIt } from './engine';
 import { exportHtml } from './export';
 import { readConfig, themeKind } from './config';
+import { collectDroppedImages, attachImageCommand } from './drop';
 import { log } from './log';
 import * as format from './format';
 
@@ -28,8 +29,19 @@ export function activate(context: vscode.ExtensionContext): { extendMarkdownIt(m
   const register = (id: string, handler: (...args: any[]) => any) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, handler));
 
-  register('buityMarkdown.openPreview', () => showPreview(context, vscode.ViewColumn.Beside));  register('buityMarkdown.openPreviewToSide', () => showPreview(context, vscode.ViewColumn.Beside));
+  register('buityMarkdown.openPreview', () => showPreview(context, vscode.ViewColumn.Beside));
+  register('buityMarkdown.openPreviewToSide', () => showPreview(context, vscode.ViewColumn.Beside));
   register('buityMarkdown.exportHtml', (uri?: vscode.Uri) => exportHtml(context, uri instanceof vscode.Uri ? uri : undefined));
+  register('buityMarkdown.attachImage', () => attachImageCommand());
+  register('buityMarkdown.toggleLiveEdit', async () => {
+    const config = vscode.workspace.getConfiguration('buityMarkdown');
+    const next = !config.get<boolean>('liveEdit', false);
+    await config.update('liveEdit', next, vscode.ConfigurationTarget.Global);
+    void vscode.window.setStatusBarMessage(
+      next ? '$(edit) Buity Markdown: live edit enabled' : '$(book) Buity Markdown: live edit disabled',
+      2500,
+    );
+  });
 
   register('buityMarkdown.toggleBold', format.toggleBold);
   register('buityMarkdown.toggleItalic', format.toggleItalic);
@@ -42,8 +54,7 @@ export function activate(context: vscode.ExtensionContext): { extendMarkdownIt(m
   register('buityMarkdown.insertTable', format.insertTable);
   register('buityMarkdown.insertMermaid', format.insertMermaid);
   register('buityMarkdown.insertMath', format.insertMath);
-  register('buityMarkdown.insertCodeBlock', format.insertCodeBlock);
-  register('buityMarkdown.toggleTask', () => {
+  register('buityMarkdown.insertCodeBlock', format.insertCodeBlock);  register('buityMarkdown.toggleTask', () => {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.languageId !== 'markdown') return;
     const line = editor.selection.active.line;
@@ -86,6 +97,18 @@ export function activate(context: vscode.ExtensionContext): { extendMarkdownIt(m
   };
 
   updateStatus();
+
+  // F5 convenience: the "watch" launch target asks for the preview to open by itself.
+  if (process.env.BUITY_SMOKE === '1') {
+    const openWhenReady = () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.languageId !== 'markdown') return;
+      log().info('smoke mode: opening the preview automatically');
+      BuityPreview.show(context, editor.document, vscode.ViewColumn.Beside);
+    };
+    setTimeout(openWhenReady, 1200);
+  }
+
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(updateStatus),
     vscode.workspace.onDidChangeTextDocument((event) => {
@@ -94,6 +117,24 @@ export function activate(context: vscode.ExtensionContext): { extendMarkdownIt(m
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('buityMarkdown')) updateStatus();
     }),
+  );
+
+  /* ------------------------------------------- drag & drop image handling */
+
+  context.subscriptions.push(
+    vscode.languages.registerDocumentDropEditProvider(
+      { language: 'markdown' },
+      {
+        async provideDocumentDropEdits(document, _position, dataTransfer) {
+          const assets = await collectDroppedImages(document, dataTransfer);
+          if (!assets.length) return undefined;
+          const insertText = assets.map((asset) => `![${asset.alt}](${asset.relative})`).join('\n');
+          const edit = new vscode.DocumentDropEdit(insertText);
+          edit.title = `Copy ${assets.length === 1 ? 'image' : `${assets.length} images`} to ${readConfig().imageFolder}`;
+          return edit;
+        },
+      },
+    ),
   );
 
   return {

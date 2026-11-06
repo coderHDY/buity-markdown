@@ -359,6 +359,96 @@ body.bm-interactive .task-list-item-checkbox:hover {
   border-color: var(--bm-accent);
 }
 
+/* ------------------------------------------------------------ live editing */
+
+.bm-article.bm-editing {
+  padding-bottom: 50vh;
+}
+
+.bm-article.bm-editing [contenteditable="true"] {
+  position: relative;
+  outline: none;
+  border-radius: 6px;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.bm-article.bm-editing [contenteditable="true"]:hover {
+  background: var(--bm-accent-soft);
+  box-shadow: -10px 0 0 2px var(--bm-accent-soft), 10px 0 0 2px var(--bm-accent-soft);
+}
+
+.bm-article.bm-editing [contenteditable="true"]:focus {
+  background: var(--bm-accent-soft);
+  box-shadow: -12px 0 0 4px var(--bm-accent-soft), 12px 0 0 4px var(--bm-accent-soft),
+    inset 0 -1px 0 0 var(--bm-accent-line);
+  caret-color: var(--bm-accent);
+}
+
+.bm-article.bm-editing .bm-callout > [contenteditable="true"]:focus {
+  background: var(--bm-accent-soft);
+  box-shadow: inset 2px 0 0 var(--bm-accent-line);
+}
+
+.bm-article.bm-editing .bm-table-wrap th[contenteditable="true"]:focus,
+.bm-article.bm-editing .bm-table-wrap td[contenteditable="true"]:focus {
+  background: var(--bm-accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--bm-accent);
+  border-radius: 3px;
+}
+
+.bm-article.bm-editing .bm-code pre,
+.bm-article.bm-editing .bm-diagram pre,
+.bm-article.bm-editing .bm-math-block {
+  cursor: text;
+}
+
+.bm-article.bm-editing .bm-code pre.is-plain,
+.bm-article.bm-editing .bm-diagram pre.is-plain {
+  font-family: var(--bm-font-mono);
+  white-space: pre-wrap;
+  color: var(--bm-fg);
+  opacity: 0.94;
+}
+
+.bm-article.bm-editing .bm-math-block.is-plain {
+  font-family: var(--bm-font-mono);
+  font-size: 0.9em;
+  color: var(--bm-inline-code-fg);
+  text-align: left;
+  padding: 0.7em 1em;
+  border: 1px dashed var(--bm-accent-line);
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+
+.bm-article.bm-editing .bm-code-head .bm-btn-copy {
+  display: none;
+}
+
+/* drop target */
+.bm-article.is-dropping::after {
+  content: "Drop image to save it in the asset folder";
+  position: fixed;
+  inset: 3rem 3rem 3rem 3rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 2rem;
+  border: 2px dashed var(--bm-accent-line);
+  border-radius: 18px;
+  background: var(--bm-accent-soft);
+  color: var(--bm-accent);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  z-index: 20;
+}
+
+body.bm-no-outline .bm-article.is-dropping::after {
+  left: 1rem;
+}
+
+
 @media (max-width: 820px) {
   .bm-sidebar {
     display: none;

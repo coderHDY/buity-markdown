@@ -42,16 +42,18 @@ Callouts can contain **lists**, `code` and even other callouts:
 - A second point
 
 > A nested quote inside a callout.
-:::
 
 ::: caution Irreversible actions
 The `caution` variant uses the ember red used for destructive hints.
 :::
+:::
 
 ::: example A worked example
+
 1. Select the text you want to wrap
 2. Run **Buity Markdown: Insert Callout** from the palette
 3. Pick a type
+
 :::
 
 GitHub alerts work too:
@@ -68,11 +70,9 @@ GitHub alerts work too:
 - [x] Ship a first version
 - [x] Write the remaining chapters
 - [x] Record a short demo
-
 1. Ordered lists keep tabular numbers
 2. So the digits line up
 3. Even at two digits, and beyond
-
 ## Code
 
 ```typescript
@@ -138,13 +138,12 @@ sequenceDiagram
 
 ## Details, keys and rules
 
-<details>
-<summary>Click to reveal a longer thought</summary>
+Click to reveal a longer thought
 
 Collapsible sections are useful for appendices, changelogs and answers that would otherwise
-interrupt the flow. Press <kbd>⌘</kbd> + <kbd>K</kbd> then <kbd>B</kbd> to reopen the preview.
+interrupt the flow. Press ⌘ + K then B to reopen the preview.
 
-</details>
+
 
 ---
 

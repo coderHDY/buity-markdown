@@ -1,12 +1,35 @@
 /* Loads the compiled extension with a stubbed `vscode` API and exercises
-   activation + the preview handshake. */
+   activation, the preview handshake, live editing round trips and image drops. */
 const Module = require('node:module');
 const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
 
-const messages = [];
-let panelHtml = '';
-let panelTitle = '';
-const posted = [];
+/* --------------------------------------------------------------- fake fs */
+
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'buity-host-'));
+const docPath = path.join(tmpRoot, 'notes.md');
+const initialText = [
+  '# Hello Buity',
+  '',
+  'Some **bold** text with $x^2$ math.',
+  '',
+  '::: tip Nice',
+  'Content here.',
+  ':::',
+  '',
+  '```js',
+  'const a = 1;',
+  '```',
+  '',
+  '| a | b |',
+  '| --- | --- |',
+  '| 1 | 2 |',
+  '',
+].join('\n');
+fs.writeFileSync(docPath, initialText);
+
+/* ----------------------------------------------------------- fake vscode */
 
 class Position {
   constructor(line, character) {
@@ -18,6 +41,9 @@ class Position {
   }
   isEqual(other) {
     return this.line === other.line && this.character === other.character;
+  }
+  isBefore(other) {
+    return this.line < other.line || (this.line === other.line && this.character < other.character);
   }
 }
 
@@ -39,38 +65,72 @@ class Selection extends Range {
   }
 }
 
-class Emitter {
-  constructor() {
-    this.listeners = [];
-    this.event = (listener) => {
-      this.listeners.push(listener);
-      return { dispose: () => {} };
-    };
-  }
-  fire(value) {
-    for (const listener of this.listeners) listener(value);
-  }
-  dispose() {}
+const messages = [];
+const posted = [];
+let panelHtml = '';
+
+let documentText = initialText;
+const document = {
+  uri: { scheme: 'file', path: docPath, fsPath: docPath, toString: () => `file://${docPath}` },
+  languageId: 'markdown',
+  get lineCount() {
+    return documentText.split('\n').length;
+  },
+  getText: (range) => {
+    if (!range) return documentText;
+    const lines = documentText.split('\n');
+    if (range.start.line === range.end.line) return lines[range.start.line].slice(range.start.character, range.end.character);
+    const out = [lines[range.start.line].slice(range.start.character)];
+    for (let line = range.start.line + 1; line < range.end.line; line++) out.push(lines[line]);
+    out.push(lines[range.end.line].slice(0, range.end.character));
+    return out.join('\n');
+  },
+  lineAt: (line) => {
+    const text = documentText.split('\n')[line] ?? '';
+    return { text, range: new Range(new Position(line, 0), new Position(line, text.length)) };
+  },
+  positionAt: (offset) => {
+    const before = documentText.slice(0, offset);
+    const lines = before.split('\n');
+    return new Position(lines.length - 1, lines[lines.length - 1].length);
+  },
+  offsetAt: (position) => {
+    const lines = documentText.split('\n');
+    let offset = 0;
+    for (let i = 0; i < position.line; i++) offset += lines[i].length + 1;
+    return offset + position.character;
+  },
+};
+
+function applyTextEdit(range, text) {
+  const lines = documentText.split('\n');
+  const startOffset =
+    lines.slice(0, range.start.line).reduce((total, line) => total + line.length + 1, 0) + range.start.character;
+  const endOffset =
+    lines.slice(0, range.end.line).reduce((total, line) => total + line.length + 1, 0) + range.end.character;
+  documentText = documentText.slice(0, startOffset) + text + documentText.slice(endOffset);
 }
 
-const sampleText = `# Hello Buity\n\nSome **bold** text with $x^2$ math.\n\n::: tip Nice\nContent here.\n:::\n\n\`\`\`js\nconst a = 1;\n\`\`\`\n\n![shot](./shot.png)\n`;
+const appliedEdits = [];
 
-const document = {
-  uri: { scheme: 'file', path: '/tmp/demo/notes.md', toString: () => 'file:///tmp/demo/notes.md' },
-  languageId: 'markdown',
-  lineCount: sampleText.split('\n').length,
-  getText: () => sampleText,
-  lineAt: (line) => ({ text: sampleText.split('\n')[line] || '' }),
-  positionAt: (offset) => new Position(0, offset),
-  offsetAt: () => 0,
-};
+class WorkspaceEdit {
+  constructor() {
+    this.ops = [];
+  }
+  replace(uri, range, text) {
+    this.ops.push({ kind: 'replace', range, text });
+  }
+  insert(uri, position, text) {
+    this.ops.push({ kind: 'insert', range: new Range(position, position), text });
+  }
+}
 
 const editor = {
   document,
   selection: new Selection(0, 0, 0, 0),
   selections: [new Selection(0, 0, 0, 0)],
   edit: (callback) => {
-    const builder = { replace() {}, insert() {} };
+    const builder = { replace: () => {}, insert: () => {} };
     callback(builder);
     return Promise.resolve(true);
   },
@@ -98,12 +158,7 @@ const webview = {
 
 const panel = {
   webview,
-  set title(value) {
-    panelTitle = value;
-  },
-  get title() {
-    return panelTitle;
-  },
+  title: '',
   iconPath: undefined,
   onDidDispose: () => ({ dispose() {} }),
   reveal() {},
@@ -111,6 +166,7 @@ const panel = {
 };
 
 const commands = new Map();
+const dropProviders = [];
 const settings = {
   'buityMarkdown.theme': 'auto',
   'buityMarkdown.fontSize': 16,
@@ -123,12 +179,21 @@ const settings = {
   'buityMarkdown.callouts': true,
   'buityMarkdown.wordCount': true,
   'buityMarkdown.readingTime': true,
+  'buityMarkdown.liveEdit': false,
+  'buityMarkdown.imageFolder': '_assets',
 };
+
+class DocumentDropEdit {
+  constructor(insertText) {
+    this.insertText = insertText;
+  }
+}
 
 const vscode = {
   Position,
   Range,
   Selection,
+  DocumentDropEdit,
   MarkdownString: class {
     constructor(value) {
       this.value = value;
@@ -139,16 +204,24 @@ const vscode = {
   StatusBarAlignment: { Left: 1, Right: 2 },
   ConfigurationTarget: { Global: 1 },
   TextEditorRevealType: { AtTop: 3, InCenterIfOutsideViewport: 1 },
-  WorkspaceEdit: class {
-    replace() {}
+  WorkspaceEdit,
+  EventEmitter: class {
+    constructor() {
+      this.event = () => ({ dispose() {} });
+    }
   },
-  EventEmitter: Emitter,
   Uri: {
     file: (p) => ({ scheme: 'file', path: p, fsPath: p, toString: () => `file://${p}` }),
-    parse: (value) => ({ scheme: 'https', path: value, toString: () => value }),
+    parse: (value) => {
+      if (value.startsWith('file://')) {
+        const p = decodeURI(value.replace('file://', ''));
+        return { scheme: 'file', path: p, fsPath: p, toString: () => `file://${p}` };
+      }
+      return { scheme: value.split(':')[0], path: value, toString: () => value };
+    },
     joinPath: (base, ...parts) => {
-      const joined = [base.path, ...parts].join('/').replace(/\/+/g, '/');
-      return { scheme: base.scheme, path: joined, fsPath: joined, toString: () => `${base.scheme || 'file'}://${joined}` };
+      const joined = path.posix.normalize([base.path, ...parts].join('/'));
+      return { scheme: base.scheme || 'file', path: joined, fsPath: joined, toString: () => `${base.scheme || 'file'}://${joined}` };
     },
   },
   window: {
@@ -156,12 +229,26 @@ const vscode = {
     visibleTextEditors: [editor],
     activeColorTheme: { kind: 2 },
     createWebviewPanel: () => panel,
+    createOutputChannel: () => ({
+      info: (...args) => console.log('[log:info]', ...args),
+      warn: () => {},
+      error: (...args) => console.log('[log:error]', ...args),
+      debug: () => {},
+      appendLine: () => {},
+      dispose: () => {},
+    }),
     createStatusBarItem: () => ({ show() {}, hide() {}, dispose() {}, text: '', tooltip: '', command: '', name: '' }),
     showInformationMessage: () => Promise.resolve(undefined),
     showWarningMessage: () => Promise.resolve(undefined),
+    showErrorMessage: (message) => {
+      console.log('[error message]', message);
+      return Promise.resolve(undefined);
+    },
+    setStatusBarMessage: () => ({ dispose() {} }),
     showSaveDialog: () => Promise.resolve(undefined),
     showInputBox: () => Promise.resolve(undefined),
     showQuickPick: () => Promise.resolve(undefined),
+    showOpenDialog: () => Promise.resolve(undefined),
     onDidChangeActiveTextEditor: () => ({ dispose() {} }),
     onDidChangeActiveColorTheme: () => ({ dispose() {} }),
     onDidChangeTextEditorVisibleRanges: () => ({ dispose() {} }),
@@ -169,19 +256,47 @@ const vscode = {
   },
   workspace: {
     textDocuments: [document],
-    getConfiguration: () => ({
-      get: (key, fallback) => (key in settings ? settings[key] : fallback),
-      update: () => Promise.resolve(),
+    getConfiguration: (section = 'buityMarkdown') => ({
+      get: (key, fallback) => {
+        const full = `${section}.${key}`;
+        return full in settings ? settings[full] : fallback;
+      },
+      update: (key, value) => {
+        settings[`${section}.${key}`] = value;
+        return Promise.resolve();
+      },
     }),
     onDidChangeTextDocument: () => ({ dispose() {} }),
     onDidChangeConfiguration: () => ({ dispose() {} }),
     onDidCloseTextDocument: () => ({ dispose() {} }),
     openTextDocument: () => Promise.resolve(document),
-    applyEdit: () => Promise.resolve(true),
+    applyEdit: (edit) => {
+      appliedEdits.push(edit);
+      for (const op of edit.ops) applyTextEdit(op.range, op.text);
+      return Promise.resolve(true);
+    },
     fs: {
-      readFile: () => Promise.resolve(Buffer.from('asset')),
-      writeFile: () => Promise.resolve(),
-      stat: () => Promise.resolve({}),
+      readFile: (uri) => Promise.resolve(new Uint8Array(fs.readFileSync(uri.fsPath || uri.path))),
+      writeFile: (uri, data) => {
+        fs.mkdirSync(path.dirname(uri.fsPath || uri.path), { recursive: true });
+        fs.writeFileSync(uri.fsPath || uri.path, Buffer.from(data));
+        return Promise.resolve();
+      },
+      stat: (uri) => {
+        const target = uri.fsPath || uri.path;
+        if (!fs.existsSync(target)) return Promise.reject(new Error('ENOENT'));
+        return Promise.resolve({});
+      },
+      createDirectory: (uri) => {
+        fs.mkdirSync(uri.fsPath || uri.path, { recursive: true });
+        return Promise.resolve();
+      },
+    },
+  },
+  languages: {
+    registerDocumentDropEditProvider: (_selector, provider) => {
+      dropProviders.push(provider);
+      return { dispose() {} };
     },
   },
   commands: {
@@ -191,9 +306,7 @@ const vscode = {
     },
     executeCommand: () => Promise.resolve(undefined),
   },
-  env: {
-    openExternal: () => Promise.resolve(true),
-  },
+  env: { openExternal: () => Promise.resolve(true) },
 };
 
 const originalLoad = Module._load;
@@ -202,52 +315,155 @@ Module._load = function (request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 
-const extension = require(path.join(process.cwd(), 'dist/extension.js'));
-const context = {
-  extensionUri: { scheme: 'file', path: process.cwd(), toString: () => process.cwd() },
-  subscriptions: [],
-};
+/* ------------------------------------------------------------------- test */
+
+let failures = 0;
+function check(ok, label, detail) {
+  console.log(`${ok ? '✓' : '✗'} ${label}`);
+  if (!ok) {
+    failures++;
+    if (detail !== undefined) console.log('    ', detail);
+  }
+}
+
+function dataTransferWith(payload) {
+  return {
+    get: (mime) => {
+      if (!(mime in payload)) return undefined;
+      const value = payload[mime];
+      return {
+        asString: () => Promise.resolve(value),
+        asFile: () => undefined,
+      };
+    },
+  };
+}
+
+const settle = async (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function waitFor(predicate, timeout = 2000) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    if (predicate()) return true;
+    await settle(25);
+  }
+  return predicate();
+}
 
 (async () => {
-  const api = extension.activate(context);
-  console.log('✓ activated, commands:', commands.size);
+  const extension = require(path.join(process.cwd(), 'dist/extension.js'));
+  const context = {
+    extensionUri: { scheme: 'file', path: process.cwd(), toString: () => process.cwd() },
+    subscriptions: [],
+    extension: { packageJSON: { version: '0.2.0' } },
+  };
 
-  // built-in preview extension point
+  const api = extension.activate(context);
+  check(commands.size >= 17, `activated with ${commands.size} commands`);
+  check(commands.has('buityMarkdown.attachImage'), 'attachImage command registered');
+  check(dropProviders.length === 1, 'markdown drop provider registered');
+
   const MarkdownIt = require('markdown-it');
   const md = new MarkdownIt({ html: true });
-  const returned = api.extendMarkdownIt(md);
-  const builtIn = returned.render('# Hi\n\n::: tip Yo\nbody\n:::\n\n$e=mc^2$\n\n- [x] done');
-  console.log('✓ extendMarkdownIt:', /bm-callout-tip/.test(builtIn), /katex/.test(builtIn), /task-list-item/.test(builtIn));
+  const builtIn = api.extendMarkdownIt(md).render('# Hi\n\n::: tip Yo\nbody\n:::\n\n$e=mc^2$');
+  check(/bm-callout-tip/.test(builtIn) && /katex/.test(builtIn), 'built-in preview extension point works');
 
   await commands.get('buityMarkdown.openPreviewToSide')();
-  console.log('✓ preview panel created, title:', panelTitle, '| html length:', panelHtml.length);
-  console.log('  CSP present:', /Content-Security-Policy/.test(panelHtml), '| nonce script:', /nonce=/.test(panelHtml));
-
-  // handshake: webview -> ready
   for (const handler of messages) await handler({ type: 'ready' });
-  await new Promise((resolve) => setTimeout(resolve, 60));
-  const types = posted.map((message) => message.type);
-  console.log('✓ messages to webview:', types.join(', '));
+  await new Promise((resolve) => setTimeout(resolve, 80));
+
   const update = posted.find((message) => message.type === 'update');
-  console.log('✓ update: headings', update.headings.length, '| html', update.html.length, '| words', update.stats.words);
-  console.log('  image resolved to webview uri:', /vscode-webview:\/\/mock/.test(update.html));
-  console.log('  copy button kept:', /data-copy/.test(update.html));
+  check(Boolean(update), 'preview received initial render');
+  check(/data-line-start/.test(update.html), 'blocks carry source ranges');
+  check(/data-callout="tip"/.test(update.html), 'callouts carry editable metadata');
 
-  // webview -> host messages
-  for (const handler of messages) await handler({ type: 'scroll', line: 5 });
-  for (const handler of messages) await handler({ type: 'toggleTask', line: 1, checked: true });
-  for (const handler of messages) await handler({ type: 'setConfig', patch: { theme: 'paper' } });
-  console.log('✓ handled scroll/toggleTask/setConfig');
+  /* ------------------------------------------------ live edit round trips */
 
-  // formatting commands
-  for (const id of ['buityMarkdown.toggleBold', 'buityMarkdown.insertTable', 'buityMarkdown.cycleHeading']) {
-    if (!commands.has(id)) throw new Error(`missing ${id}`);
-    await commands.get(id)();
+  // Replace the paragraph on line 3.
+  documentText = initialText;
+  for (const handler of messages) {
+    await handler({ type: 'applyEdit', start: 3, end: 3, text: 'Rewritten **paragraph** with a [link](https://example.com).' });
   }
-  console.log('✓ formatting commands ran');
+  check(documentText.split('\n')[2] === 'Rewritten **paragraph** with a [link](https://example.com).', 'applyEdit replaced the paragraph line', documentText.split('\n')[2]);
 
-  console.log('\nall good');
+  // Replace the whole table (as the webview does after a cell edit).
+  documentText = initialText;
+  const tableEdit = '| a | b |\n| --- | :---: |\n| 1 | updated |';
+  for (const handler of messages) {
+    await handler({ type: 'applyEdit', start: 13, end: 15, text: tableEdit });
+  }
+  check(documentText.includes('| 1 | updated |'), 'applyEdit replaced a multi-line table');
+  check(documentText.includes('| --- | :---: |'), 'table alignment survives');
+
+  // No-op edits must not touch the document.
+  const before = appliedEdits.length;
+  for (const handler of messages) await handler({ type: 'applyEdit', start: 1, end: 1, text: '# Hello Buity' });
+  check(appliedEdits.length === before, 'identical edit is skipped');
+
+  /* ------------------------------------------------------- image handling */
+
+  documentText = initialText;
+  const pngBase64 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  ).toString('base64');
+
+  for (const handler of messages) {
+    await handler({ type: 'attachImage', name: 'Diagram 1.png', data: pngBase64, mime: 'image/png', line: 3 });
+  }
+  await waitFor(() => fs.existsSync(path.join(tmpRoot, '_assets', 'Diagram-1.png')));
+  const assetsDir = path.join(tmpRoot, '_assets');
+  check(fs.existsSync(assetsDir), '_assets folder created next to the document');
+  const stored = fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir) : [];
+  check(stored.length === 1, `image copied into _assets (${stored.join(', ')})`);
+  check(stored[0] === 'Diagram-1.png', 'file name sanitised');
+  check(documentText.includes('![Diagram-1](./_assets/Diagram-1.png)'), 'relative markdown image inserted', documentText);
+
+  // A second image with the same name must not overwrite the first.
+  for (const handler of messages) {
+    await handler({ type: 'attachImage', name: 'Diagram 1.png', data: pngBase64, mime: 'image/png', line: 3 });
+  }
+  await waitFor(() => fs.readdirSync(assetsDir).length === 2);
+  const stored2 = fs.readdirSync(assetsDir).sort();
+  check(stored2.length === 2 && stored2.includes('Diagram-1-1.png'), `duplicate names are suffixed (${stored2.join(', ')})`);
+
+  const pngPath = path.join(tmpRoot, 'dropped.png');
+  fs.writeFileSync(pngPath, Buffer.from(pngBase64, 'base64'));
+
+  const dropEdit = await dropProviders[0].provideDocumentDropEdits(
+    document,
+    new Position(0, 0),
+    dataTransferWith({ 'text/uri-list': `file://${pngPath}` }),
+  );
+  check(Boolean(dropEdit), 'drop provider returned an edit');
+  check(/!\[dropped\]\(\.\/_assets\/dropped\.png\)/.test(String(dropEdit?.insertText || '')), 'drop inserts the asset-relative path', dropEdit?.insertText);
+  check(fs.existsSync(path.join(assetsDir, 'dropped.png')), 'dropped file copied into _assets');
+
+  const textDrop = await dropProviders[0].provideDocumentDropEdits(
+    document,
+    new Position(0, 0),
+    dataTransferWith({ 'text/plain': pngPath }),
+  );
+  check(Boolean(textDrop), 'plain-text path drops are handled too');
+
+  const ignoredDrop = await dropProviders[0].provideDocumentDropEdits(
+    document,
+    new Position(0, 0),
+    dataTransferWith({ 'text/plain': 'just some text' }),
+  );
+  check(ignoredDrop === undefined, 'non-image drops are ignored');
+
+  /* ------------------------------------------------------------- cleanup */
+
+  for (const handler of messages) await handler({ type: 'setConfig', patch: { theme: 'paper', liveEdit: true } });
+  await waitFor(() => settings['buityMarkdown.theme'] === 'paper' && settings['buityMarkdown.liveEdit'] === true);
+  check(settings['buityMarkdown.theme'] === 'paper' && settings['buityMarkdown.liveEdit'] === true, 'config changes persisted');
+
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+
+  console.log(failures ? `\n${failures} check(s) failed` : '\nall host checks passed');
+  process.exit(failures ? 1 : 0);
 })().catch((error) => {
-  console.error('✗ failed:', error);
+  console.error('failed:', error);
   process.exit(1);
 });

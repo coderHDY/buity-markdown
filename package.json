@@ -2,7 +2,7 @@
   "name": "buity-markdown",
   "displayName": "Buity Markdown",
   "description": "A beautiful markdown editor & live preview — editorial typography, callouts, math, diagrams, outline navigation and one-click export.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "buity",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -116,6 +116,18 @@
         "command": "buityMarkdown.insertCodeBlock",
         "title": "Insert Code Block",
         "category": "Buity Markdown"
+      },
+      {
+        "command": "buityMarkdown.attachImage",
+        "title": "Insert Image…",
+        "category": "Buity Markdown",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "buityMarkdown.toggleLiveEdit",
+        "title": "Toggle Live Edit Mode",
+        "category": "Buity Markdown",
+        "icon": "$(edit)"
       }
     ],
     "keybindings": [
@@ -160,6 +172,11 @@
           "command": "buityMarkdown.insertMermaid",
           "when": "editorLangId == markdown",
           "group": "buity@3"
+        },
+        {
+          "command": "buityMarkdown.attachImage",
+          "when": "editorLangId == markdown",
+          "group": "buity@4"
         }
       ]
     },
@@ -240,6 +257,16 @@
           "type": "boolean",
           "default": true,
           "description": "Include an estimated reading time in the status bar tooltip."
+        },
+        "buityMarkdown.liveEdit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open the preview in live editing mode (Obsidian-style): click any block to edit it in place."
+        },
+        "buityMarkdown.imageFolder": {
+          "type": "string",
+          "default": "_assets",
+          "description": "Folder, created next to the markdown file, where dropped or pasted images are stored."
         }
       }
     },
@@ -259,8 +286,11 @@
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "package": "npm run build && vsce package",
-    "vscode:prepublish": "npm run build"
+    "test:serialize": "node -e \"require('child_process').execSync('npx esbuild scripts/serialize-test.mts --bundle --platform=node --format=cjs --outfile=dist/serialize-test.cjs --external:jsdom --log-level=warning', {stdio:'inherit'})\" && node dist/serialize-test.cjs",
+    "test:host": "node scripts/host-smoke.cjs",
+    "test:browser": "node scripts/cdp-test.mjs",
+    "test": "npm run typecheck && npm run build && npm run test:serialize && npm run test:host",
+    "package": "vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/buity/buity-markdown/main"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
@@ -271,13 +301,28 @@
     "sanitize-html": "^2.17.0"
   },
   "devDependencies": {
+    "@types/jsdom": "^30.0.0",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.10.2",
     "@types/sanitize-html": "^2.13.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.24.2",
+    "jsdom": "^31.0.0",
     "mermaid": "^11.4.1",
     "typescript": "^5.7.2"
-  }
+  },
+  "keybindings": [
+    {
+      "command": "buityMarkdown.toggleLiveEdit",
+      "key": "ctrl+alt+e",
+      "mac": "cmd+alt+e"
+    },
+    {
+      "command": "buityMarkdown.attachImage",
+      "key": "ctrl+alt+i",
+      "mac": "cmd+alt+i",
+      "when": "editorLangId == markdown"
+    }
+  ]
 }

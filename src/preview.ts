@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { createEngine, Engine, RenderResult } from './engine';
 import { BuityConfig, readConfig, themeKind } from './config';
+import { ASSET_DIR, saveAssetBeside } from './assets';
 import { log } from './log';
 
 function nonce(): string {
@@ -205,6 +206,14 @@ export class BuityPreview {
         await this.persistConfig(message.patch || {});
         break;
 
+      case 'applyEdit':
+        await this.applySourceEdit(Number(message.start), Number(message.end), String(message.text ?? ''));
+        break;
+
+      case 'attachImage':
+        await this.attachImage(String(message.name || 'image.png'), String(message.data || ''), String(message.mime || ''), Number(message.line) || 0);
+        break;
+
       case 'rendered':
         if (message.nodes === 0) {
           if (!this.loggedDiagrams && message.diagrams > 0) {
@@ -228,9 +237,55 @@ export class BuityPreview {
   private async persistConfig(patch: Record<string, unknown>) {
     const config = vscode.workspace.getConfiguration('buityMarkdown');
     for (const [key, value] of Object.entries(patch)) {
-      if (['theme', 'fontSize', 'lineHeight', 'width', 'showOutline', 'syncScroll'].includes(key)) {
+      if (['theme', 'fontSize', 'lineHeight', 'width', 'showOutline', 'syncScroll', 'liveEdit'].includes(key)) {
         await config.update(key, value, vscode.ConfigurationTarget.Global);
       }
+    }
+  }
+
+  /* --------------------------------------------------------- live editing */
+
+  private async applySourceEdit(start: number, end: number, text: string) {
+    const document = this.document;
+    const lineCount = document.lineCount;
+    const from = Math.min(Math.max(0, start - 1), Math.max(0, lineCount - 1));
+    const to = Math.min(Math.max(from, end - 1), Math.max(0, lineCount - 1));
+    const range = new vscode.Range(from, 0, to, document.lineAt(to).text.length);
+    const current = document.getText(range);
+    if (current === text) return;
+
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(this.docUri, range, text);
+    try {
+      await vscode.workspace.applyEdit(edit);
+    } catch (error) {
+      log().error(`applyEdit failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async attachImage(name: string, base64: string, mime: string, line: number) {
+    try {
+      const data = Buffer.from(base64, 'base64');
+      const saved = await saveAssetBeside(this.docUri, name, new Uint8Array(data), mime);
+      const alt = saved.name.replace(/\.[^.]+$/, '');
+      const markdown = `\n\n![${alt}](${saved.relative})\n`;
+      // `line` is the 1-based last line of the block the image was dropped on;
+      // insert right after it so the picture becomes its own paragraph.
+      const anchorLine = Math.min(
+        this.document.lineCount - 1,
+        Math.max(0, (Number.isFinite(line) && line > 0 ? line : this.document.lineCount) - 1),
+      );
+      const position = new vscode.Position(anchorLine, this.document.lineAt(anchorLine).text.length);
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(this.docUri, position, markdown);
+      await vscode.workspace.applyEdit(edit);
+      log().info(`image stored at ${saved.relative}`);
+      void vscode.window.setStatusBarMessage(`$(check) Image saved to ${ASSET_DIR}/${saved.name}`, 3000);
+    } catch (error) {
+      log().error(`attachImage failed: ${error instanceof Error ? error.message : String(error)}`);
+      void vscode.window.showErrorMessage(
+        `Buity Markdown: could not save the image — ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -352,6 +407,8 @@ export class BuityPreview {
     <div class="bm-tools">
       <button class="bm-icon-btn" id="btn-font-dec" title="Smaller text" aria-label="Smaller text">A−</button>
       <button class="bm-icon-btn" id="btn-font-inc" title="Larger text" aria-label="Larger text">A+</button>
+      <span class="bm-divider"></span>
+      <button class="bm-icon-btn" id="btn-edit" title="Live edit — click any block to edit it in place" aria-label="Toggle live edit" aria-pressed="false">✎</button>
       <span class="bm-divider"></span>
       <div class="bm-seg" id="theme-seg" role="group" aria-label="Theme">
         <button data-theme="auto" title="Follow VS Code theme">Auto</button>

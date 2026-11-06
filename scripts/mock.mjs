@@ -42,6 +42,8 @@ const html = `<!DOCTYPE html>
       <button class="bm-icon-btn" id="btn-font-dec" title="Smaller text">A−</button>
       <button class="bm-icon-btn" id="btn-font-inc" title="Larger text">A+</button>
       <span class="bm-divider"></span>
+      <button class="bm-icon-btn" id="btn-edit" title="Live edit">✎</button>
+      <span class="bm-divider"></span>
       <div class="bm-seg" id="theme-seg" role="group">
         <button data-theme="auto" title="Follow VS Code theme">Auto</button>
         <button data-theme="paper" title="Paper theme">Paper</button>
@@ -68,12 +70,21 @@ const html = `<!DOCTYPE html>
     const params = new URLSearchParams(location.search);
     const theme = params.get('theme') || 'paper';
     const kind = theme === 'midnight' ? 'dark' : 'light';
+    const liveEdit = params.get('edit') === '1';
+    window.__edits = [];
+    window.__images = [];
     window.acquireVsCodeApi = () => ({
       postMessage(message) {
+        if (message.type === 'applyEdit') window.__edits.push(message);
+        if (message.type === 'attachImage') window.__images.push({ name: message.name, size: (message.data || '').length });
+        if (message.type === 'setConfig') {
+          window.__config = { ...(window.__config || {}), ...(message.patch || {}) };
+          return;
+        }
         if (message.type !== 'ready') return;
         window.postMessage({
           type: 'init',
-          config: { theme, fontSize: 16, lineHeight: 1.75, width: 'comfortable', showOutline: true, syncScroll: true, mermaid: true },
+          config: { theme, fontSize: 16, lineHeight: 1.75, width: 'comfortable', showOutline: true, syncScroll: true, mermaid: true, liveEdit },
           themeKind: kind,
           mermaidUri: '/vendor/mermaid.min.js',
         }, '*');
@@ -97,13 +108,39 @@ const html = `<!DOCTYPE html>
   </script>
   <script src="/webview.js"></script>
   <script>
+    if (params.get('focus')) {
+      setTimeout(() => {
+        const article = document.getElementById('article');
+        const blocks = article.querySelectorAll('[contenteditable="true"]');
+        const target = blocks[Number(params.get('focus')) || 0];
+        if (target) target.focus();
+      }, 500);
+    }
     if (params.get('diag')) {
       const errors = [];
       window.addEventListener('error', (event) => errors.push(String(event.message)));
       window.addEventListener('unhandledrejection', (event) => errors.push(String(event.reason)));
-      setTimeout(() => {
+      (async () => {
+        await new Promise((resolve) => setTimeout(resolve, 2200));
         const article = document.getElementById('article');
         const style = (node, prop) => node ? getComputedStyle(node).getPropertyValue(prop) : 'n/a';
+
+        let typed = null;
+        if (params.get('typed')) {
+          const paragraph = article.querySelector('p[contenteditable="true"]') || article.querySelector('p');
+          paragraph.focus();
+          paragraph.textContent = 'Typed replacement text.';
+          paragraph.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+          await new Promise((resolve) => setTimeout(resolve, 900));
+          typed = {
+            edits: window.__edits,
+            editableBlocks: article.querySelectorAll('[contenteditable="true"]').length,
+            focused: document.activeElement?.tagName || null,
+            editingClass: article.classList.contains('bm-editing'),
+            focusRing: style(document.activeElement, 'box-shadow'),
+          };
+        }
+
         const toolbar = document.querySelector('.bm-toolbar');
         const sidebar = document.getElementById('sidebar');
         const copy = article.querySelector('.bm-btn-copy');
@@ -138,12 +175,14 @@ const html = `<!DOCTYPE html>
           mermaidNodes: article.querySelectorAll('pre.mermaid').length,
           progressWidth: style(document.getElementById('progress-bar'), 'width'),
           overflowX: article.scrollWidth > article.clientWidth,
+          editButton: document.getElementById('btn-edit').className,
+          typed,
           errors,
         };
         document.body.innerHTML = '<pre id="diag">' + JSON.stringify(diag, null, 2).replace(/</g, '&lt;') + '</pre>';
         document.body.style.overflow = 'auto';
         document.body.style.height = 'auto';
-      }, 2500);
+      })();
     }
   </script>
 </body>

@@ -12,6 +12,8 @@ export interface BuityConfig {
   callouts: boolean;
   wordCount: boolean;
   readingTime: boolean;
+  liveEdit: boolean;
+  imageFolder: string;
 }
 
 export const CONFIG_SECTION = 'buityMarkdown';
@@ -30,6 +32,8 @@ export function readConfig(): BuityConfig {
     callouts: config.get<boolean>('callouts', true),
     wordCount: config.get<boolean>('wordCount', true),
     readingTime: config.get<boolean>('readingTime', true),
+    liveEdit: config.get<boolean>('liveEdit', false),
+    imageFolder: config.get<string>('imageFolder', '_assets'),
   };
 }
 

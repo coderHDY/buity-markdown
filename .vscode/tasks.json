@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "buity: build",
+      "type": "shell",
+      "command": "node scripts/build.mjs",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "buity: watch",
+      "type": "shell",
+      "command": "node scripts/build.mjs --watch",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "buity",
+          "endsPattern": "watching"
+        }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "buity: typecheck",
+      "type": "shell",
+      "command": "npx tsc --noEmit",
+      "problemMatcher": ["$tsc"],
+      "group": "test"
+    },
+    {
+      "label": "buity: package vsix",
+      "type": "shell",
+      "command": "npx vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/buity/buity-markdown/main",
+      "problemMatcher": []
+    }
+  ]
+}

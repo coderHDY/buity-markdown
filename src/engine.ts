@@ -149,7 +149,10 @@ function mathPlugin(md: MarkdownIt) {
         output: 'html',
         trust: false,
       });
-      return display ? `<div class="bm-math bm-math-block">${html}</div>` : `<span class="bm-math bm-math-inline">${html}</span>`;
+      const source = escapeHtml(tex);
+      return display
+        ? `<div class="bm-math bm-math-block" data-tex="${source}">${html}</div>`
+        : `<span class="bm-math bm-math-inline" data-tex="${source}">${html}</span>`;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return `<code class="bm-math-error" title="${escapeHtml(msg)}">${escapeHtml(tex)}</code>`;
@@ -204,7 +207,12 @@ function mathPlugin(md: MarkdownIt) {
     return true;
   });
 
-  md.renderer.rules.bm_math_block = (tokens, idx) => render(tokens[idx].content, true);
+  md.renderer.rules.bm_math_block = (tokens, idx) => {
+    const token = tokens[idx];
+    const range = token.map ? ` data-line="${token.map[0] + 1}" data-line-start="${token.map[0] + 1}" data-line-end="${token.map[1]}"` : '';
+    const inner = render(token.content, true);
+    return range ? inner.replace('<div class="bm-math bm-math-block"', `<div class="bm-math bm-math-block"${range}`) : inner;
+  };
 
   // inline: $...$ and \(...\)
   md.inline.ruler.after('escape', 'bm_math_inline', (state: State, silent: boolean) => {
@@ -261,13 +269,24 @@ function calloutContainer(md: MarkdownIt) {
 
     let nextLine = startLine;
     let autoClosed = false;
+    let depth = 0;
     for (;;) {
       nextLine++;
       if (nextLine >= endLine) break;
       const s = state.bMarks[nextLine] + state.tShift[nextLine];
       const e = state.eMarks[nextLine];
       if (s < e && state.sCount[nextLine] < state.blkIndent) break;
-      if (state.src.slice(s, e).trim().match(/^:{3,}$/)) {
+      const text = state.src.slice(s, e).trim();
+      if (/^:{3,}\s*[A-Za-z]/.test(text)) {
+        // a nested callout opens; its own closing fence must not close us
+        depth++;
+        continue;
+      }
+      if (/^:{3,}$/.test(text)) {
+        if (depth > 0) {
+          depth--;
+          continue;
+        }
         autoClosed = true;
         break;
       }
@@ -280,7 +299,7 @@ function calloutContainer(md: MarkdownIt) {
 
     const open = state.push('bm_callout_open', 'div', 1);
     open.block = true;
-    open.map = [startLine, nextLine];
+    open.map = [startLine, nextLine + (autoClosed ? 1 : 0)];
     open.meta = { type, title };
     open.attrSet('class', `bm-callout bm-callout-${type}`);
 
@@ -297,9 +316,13 @@ function calloutContainer(md: MarkdownIt) {
 
   md.renderer.rules.bm_callout_open = (tokens, idx) => {
     const meta = tokens[idx].meta || {};
-    const label = meta.title ? md.utils.escapeHtml(meta.title) : CALLOUT_LABELS[meta.type] || 'Note';
+    const title = meta.title || '';
+    const label = title ? md.utils.escapeHtml(title) : CALLOUT_LABELS[meta.type] || 'Note';
+    const map = tokens[idx].map;
+    const range = map ? ` data-line-start="${map[0] + 1}" data-line-end="${map[1]}"` : '';
     return (
-      `<div class="bm-callout bm-callout-${meta.type || 'note'}">` +
+      `<div class="bm-callout bm-callout-${meta.type || 'note'}" data-callout="${meta.type || 'note'}"` +
+      ` data-callout-title="${escapeHtml(title)}"${range}>` +
       `<div class="bm-callout-title"><span class="bm-callout-dot"></span>${label}</div>`
     );
   };
@@ -337,6 +360,7 @@ function githubAlerts(md: MarkdownIt) {
 
       if (rest.trim()) {
         inline.content = rest;
+        inline.children = [];
         state.md.inline.parse(inline.content, state.md, state.env, inline.children);
       } else {
         // drop the emptied first paragraph
@@ -348,9 +372,13 @@ function githubAlerts(md: MarkdownIt) {
 
   md.renderer.rules.bm_alert_open = (tokens, idx) => {
     const meta = tokens[idx].meta || {};
-    const label = meta.title ? md.utils.escapeHtml(meta.title) : CALLOUT_LABELS[meta.type] || 'Note';
+    const title = meta.title || '';
+    const label = title ? md.utils.escapeHtml(title) : CALLOUT_LABELS[meta.type] || 'Note';
+    const map = tokens[idx].map;
+    const range = map ? ` data-line-start="${map[0] + 1}" data-line-end="${map[1]}"` : '';
     return (
-      `<div class="bm-callout bm-callout-${meta.type || 'note'}">` +
+      `<div class="bm-callout bm-callout-${meta.type || 'note'}" data-callout="${meta.type || 'note'}"` +
+      ` data-callout-title="${escapeHtml(title)}" data-callout-syntax="alert"${range}>` +
       `<div class="bm-callout-title"><span class="bm-callout-dot"></span>${label}</div>`
     );
   };
@@ -425,21 +453,36 @@ export function createEngine(options: EngineOptions = {}): Engine {
 
   // table scroll wrapper + source line anchors
   const renderToken = md.renderer.renderToken.bind(md.renderer);
+  const lineRange = (token: Token) =>
+    token.map ? ` data-line="${token.map[0] + 1}" data-line-start="${token.map[0] + 1}" data-line-end="${token.map[1]}"` : '';
+
   md.renderer.renderToken = (tokens: Token[], idx: number, options2: any) => {
     const token = tokens[idx];
+    // The footnote section is generated from the definitions at the end of the
+    // file; keep it read-only so live edits can never drop those definitions.
+    if (token.type.startsWith('footnote_')) {
+      token.attrSet('data-locked', 'true');
+      if (token.type === 'footnote_block_open') token.attrJoin('class', 'bm-footnotes');
+      return renderToken(tokens, idx, options2);
+    }
     if (token.type === 'table_open') {
-      return `<div class="bm-table-wrap">${renderToken(tokens, idx, options2)}`;
+      return `<div class="bm-table-wrap"${lineRange(token)}>${renderToken(tokens, idx, options2)}`;
     }
     if (token.type === 'table_close') {
       return `${renderToken(tokens, idx, options2)}</div>`;
     }
     if (
       token.map &&
+      token.level === 0 &&
       token.nesting !== -1 &&
       token.block &&
-      (token.type.endsWith('_open') || token.type === 'fence' || token.type === 'hr')
+      (token.type.endsWith('_open') || token.type === 'fence' || token.type === 'hr' || token.type === 'html_block')
     ) {
-      if (!token.attrGet('data-line')) token.attrPush(['data-line', String(token.map[0] + 1)]);
+      if (!token.attrGet('data-line')) {
+        token.attrPush(['data-line', String(token.map[0] + 1)]);
+        token.attrPush(['data-line-start', String(token.map[0] + 1)]);
+        token.attrPush(['data-line-end', String(token.map[1])]);
+      }
     }
     return renderToken(tokens, idx, options2);
   };
@@ -449,6 +492,7 @@ export function createEngine(options: EngineOptions = {}): Engine {
     if (token.children && token.children.length) {
       token.attrSet('alt', self.renderInlineAsText(token.children, options2, env));
     }
+    if (!token.attrGet('data-src')) token.attrPush(['data-src', token.attrGet('src') || '']);
     if (resolveImage) {
       const src = token.attrGet('src');
       if (src) {
@@ -466,12 +510,14 @@ export function createEngine(options: EngineOptions = {}): Engine {
     const info = token.info ? md.utils.unescapeAll(token.info).trim() : '';
     const lang = info ? info.split(/\s+/g)[0] : '';
     const raw = token.content;
-    const lineAttr = token.map ? ` data-line="${token.map[0] + 1}"` : '';
+    const lineAttr = token.map
+      ? ` data-line="${token.map[0] + 1}" data-line-start="${token.map[0] + 1}" data-line-end="${token.map[1]}"`
+      : '';
     const langCheck = lang.toLowerCase();
 
     if (opts.mermaid && (langCheck === 'mermaid' || langCheck === 'mmd')) {
       return (
-        `<figure class="bm-diagram"${lineAttr}>` +
+        `<figure class="bm-diagram" data-lang="${escapeHtml(lang)}" data-src="${escapeHtml(raw)}"${lineAttr}>` +
         `<div class="bm-code-head"><span class="bm-lang">mermaid</span>` +
         `<span class="bm-code-actions"><button class="bm-btn-copy" type="button" data-copy>Copy</button></span></div>` +
         `<pre class="mermaid">${md.utils.escapeHtml(raw)}</pre>` +
@@ -585,7 +631,7 @@ function sanitize(html: string): string {
       sanitizeHtml(input, {
         allowedTags: tags,
         allowedAttributes: {
-          '*': ['class', 'id', 'style', 'title', 'align', 'data-line', 'data-callout', 'data-copy', 'data-src', 'aria-hidden', 'aria-label', 'role', 'dir', 'lang', 'type'],
+          '*': ['class', 'id', 'style', 'title', 'align', 'data-line', 'data-line-start', 'data-line-end', 'data-callout', 'data-callout-title', 'data-callout-syntax', 'data-copy', 'data-src', 'data-tex', 'data-raw', 'aria-hidden', 'aria-label', 'role', 'dir', 'lang', 'type', 'contenteditable', 'spellcheck'],
           a: ['href', 'name', 'target', 'rel', 'class', 'id', 'title', 'aria-hidden'],
           img: ['src', 'srcset', 'alt', 'width', 'height', 'loading', 'class', 'title'],
           input: ['type', 'checked', 'disabled', 'class'],

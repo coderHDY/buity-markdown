@@ -1,4 +1,6 @@
 /* Buity Markdown — preview client */
+import { LiveEditor } from './editor';
+
 declare function acquireVsCodeApi(): { postMessage(msg: any): void; getState(): any; setState(s: any): void };
 declare const mermaid: any;
 
@@ -16,6 +18,7 @@ interface Config {
   showOutline: boolean;
   syncScroll: boolean;
   mermaid: boolean;
+  liveEdit: boolean;
 }
 
 const vscode = acquireVsCodeApi();
@@ -35,6 +38,7 @@ const el = {
   fontInc: document.getElementById('btn-font-inc') as HTMLButtonElement,
   exportBtn: document.getElementById('btn-export') as HTMLButtonElement,
   topBtn: document.getElementById('btn-top') as HTMLButtonElement,
+  editBtn: document.getElementById('btn-edit') as HTMLButtonElement,
 };
 
 const WIDTHS: Record<string, string> = {
@@ -52,6 +56,7 @@ let config: Config = {
   showOutline: true,
   syncScroll: true,
   mermaid: true,
+  liveEdit: false,
 };
 
 let themeKind: 'light' | 'dark' = 'dark';
@@ -60,6 +65,24 @@ let mermaidPromise: Promise<any> | null = null;
 let suppressScrollEvent = 0;
 let scrollTimer: number | undefined;
 let lineIndex: { line: number; el: HTMLElement }[] = [];
+let live: LiveEditor | undefined;
+
+/* ---------------------------------------------------------- live editing */
+
+live = new LiveEditor({
+  article: el.article,
+  post: (message) => vscode.postMessage(message),
+  onFlush: () => applyDeferredUpdate(),
+});
+
+function applyDeferredUpdate() {
+  const message = live?.takeDeferred();
+  if (message) applyUpdate(message);
+}
+
+function toggleLiveEdit() {
+  postConfig({ liveEdit: !config.liveEdit });
+}
 
 /* ------------------------------------------------------------------ config */
 
@@ -82,6 +105,9 @@ function applyConfig() {
   el.body.classList.toggle('bm-no-outline', !config.showOutline);
   el.outlineBtn.classList.toggle('is-on', config.showOutline);
   el.outlineBtn.setAttribute('aria-pressed', String(config.showOutline));
+  el.editBtn.classList.toggle('is-on', config.liveEdit);
+  el.editBtn.setAttribute('aria-pressed', String(config.liveEdit));
+  if (live) live.setEnabled(config.liveEdit);
 }
 
 function postConfig(patch: Partial<Config>) {
@@ -268,10 +294,7 @@ function formatNumber(value: number) {
 }
 
 function applyUpdate(message: any) {
-  const ratio =
-    el.main.scrollHeight > el.main.clientHeight
-      ? el.main.scrollTop / (el.main.scrollHeight - el.main.clientHeight)
-      : 0;
+  const anchor = topVisibleLine();
 
   el.article.innerHTML = message.html || '';
   el.titleText.textContent = message.title || 'Preview';
@@ -284,11 +307,11 @@ function applyUpdate(message: any) {
 
   buildIndex();
   renderToc(message.headings || []);
+  live?.resetHistory();
+  live?.refresh();
 
-  // keep the reader roughly where they were
-  if (ratio > 0.001) {
-    el.main.scrollTop = ratio * (el.main.scrollHeight - el.main.clientHeight);
-  }
+  // restore the reading position by source line, so edits never make the page jump
+  if (anchor > 1) scrollToLine(anchor, false);
 
   scheduleDiagrams();
   scheduleDiagramAck();
@@ -296,12 +319,21 @@ function applyUpdate(message: any) {
   updateProgress();
 }
 
+/** Source line of the first block currently visible. */
+function topVisibleLine(): number {
+  const top = el.main.scrollTop + 6;
+  for (const entry of lineIndex) {
+    if (entry.el.offsetTop >= top) return entry.line;
+  }
+  return 1;
+}
+
 /* ----------------------------------------------------------------- events */
 
 el.main.addEventListener('scroll', () => {
   updateProgress();
   if (Date.now() - suppressScrollEvent < 200) return;
-  if (!config.syncScroll) return;
+  if (!config.syncScroll || live?.isActive()) return;
   window.clearTimeout(scrollTimer);
   scrollTimer = window.setTimeout(() => {
     const line = lineAtOffset(el.main.scrollTop + 8);
@@ -351,6 +383,8 @@ el.article.addEventListener('click', (event) => {
   const anchor = target.closest<HTMLAnchorElement>('a');
   if (!anchor) return;
   const href = anchor.getAttribute('href') || '';
+  // while editing, let the caret move instead of navigating away
+  if (live?.isActive()) return;
   event.preventDefault();
   if (href.startsWith('#')) {
     const id = decodeURIComponent(href.slice(1));
@@ -389,6 +423,43 @@ el.fontDec.addEventListener('click', () => postConfig({ fontSize: Math.max(12, c
 el.outlineBtn.addEventListener('click', () => postConfig({ showOutline: !config.showOutline }));
 el.exportBtn.addEventListener('click', () => vscode.postMessage({ type: 'export' }));
 el.topBtn.addEventListener('click', () => el.main.scrollTo({ top: 0, behavior: 'smooth' }));
+el.editBtn.addEventListener('click', toggleLiveEdit);
+
+/* drag & drop images from the OS straight into the document */
+let dragDepth = 0;
+
+el.article.addEventListener('dragenter', (event) => {
+  if (!config.liveEdit) return;
+  if (!event.dataTransfer?.types.includes('Files')) return;
+  event.preventDefault();
+  dragDepth++;
+  el.article.classList.add('is-dropping');
+});
+
+el.article.addEventListener('dragover', (event) => {
+  if (!config.liveEdit) return;
+  if (!event.dataTransfer?.types.includes('Files')) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'copy';
+});
+
+el.article.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) el.article.classList.remove('is-dropping');
+});
+
+el.article.addEventListener('drop', (event) => {
+  dragDepth = 0;
+  el.article.classList.remove('is-dropping');
+  if (!config.liveEdit) return;
+  const files = Array.from(event.dataTransfer?.files || []).filter((file) => file.type.startsWith('image/'));
+  if (!files.length) return;
+  event.preventDefault();
+  const block = (document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null)?.closest<HTMLElement>(
+    '[data-line-start]',
+  );
+  for (const file of files) void live?.sendImageAt(file, block ?? null);
+});
 
 window.addEventListener('message', (event) => {
   const message = event.data;
@@ -401,6 +472,15 @@ window.addEventListener('message', (event) => {
         applyConfig();
         break;
       case 'update':
+        if (live?.isActive()) {
+          live.deferUpdate(message);
+          if (message.stats) {
+            const parts = [`${formatNumber(message.stats.words)} words`];
+            if (message.stats.readingMinutes) parts.push(`~${message.stats.readingMinutes} min read`);
+            el.stats.textContent = parts.join('  ·  ');
+          }
+          break;
+        }
         applyUpdate(message);
         vscode.postMessage({
           type: 'rendered',

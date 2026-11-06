@@ -21,7 +21,42 @@ Because the default one is a technical document renderer, not a reading experien
 - **Two-way scroll sync** — scroll either side and the other follows, anchored by source lines.
 - **Components that belong together** — callouts, math, diagrams, tables, code with copy buttons,
   task lists that write back to your file.
+- **Live editing in the preview** — like Obsidian's live preview: click a block and write.
 - **A standalone HTML export** with images embedded as data URIs, so a single file is shareable.
+
+## Live editing
+
+![Live editing in the preview](docs/live-edit.png)
+
+Press the **✎** button in the preview toolbar (or run **Buity Markdown: Toggle Live Edit Mode**,
+<kbd>⌘</kbd><kbd>⌥</kbd><kbd>E</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>E</kbd>) and the preview becomes
+the editor:
+
+- Click any block — paragraph, heading, list, table cell, callout body, code fence, math
+  block — and type. The Markdown file is updated as you go.
+- `⌘B` / `⌘I` / `⌘E` / `⌘⇧X` wrap the selection in bold, italic, code or strikethrough;
+  `⌘K` inserts a link.
+- `Enter` splits a paragraph, `Tab` walks between table cells, `Esc` leaves the block.
+- Rendering is deferred while a block has focus, so the caret never jumps; the reading
+  position is restored by source line afterwards.
+- Footnotes stay read-only (their definitions live at the end of the file).
+
+## Images
+
+Drop an image **onto the preview** (in live edit mode) or **onto a Markdown editor** and it is
+copied into `_assets` next to your file — the folder is created on first use:
+
+```
+notes/
+  notes.md
+  _assets/
+    diagram.png
+```
+
+and your file gets `![diagram](./_assets/diagram.png)`. Duplicate file names are suffixed
+(`diagram-1.png`) instead of overwritten. Pasting an image works the same way, and
+**Buity Markdown: Insert Image…** (<kbd>⌘</kbd><kbd>⌥</kbd><kbd>I</kbd>) does it from disk.
+Set `buityMarkdown.imageFolder` to use another folder name.
 
 ## The live preview
 
@@ -130,6 +165,8 @@ insert a callout, table, diagram, math block or fenced code block.
 | `buityMarkdown.callouts` | `true` | Callouts in the built-in preview |
 | `buityMarkdown.wordCount` | `true` | Word count in the status bar |
 | `buityMarkdown.readingTime` | `true` | Estimated reading time |
+| `buityMarkdown.liveEdit` | `false` | Open the preview as an editable surface |
+| `buityMarkdown.imageFolder` | `_assets` | Folder for dropped / pasted images |
 
 ## 中文速览
 
@@ -139,6 +176,11 @@ insert a callout, table, diagram, math block or fenced code block.
 - 三套配色（跟随主题 / 暖纸 / 深夜），可调字号、行高与正文宽度。
 - 支持 `:::` 提示块、GitHub 风格 `> [!NOTE]`、KaTeX 公式、Mermaid 图表、代码复制按钮、
   可勾选的任务清单（会直接写回源文件）。
+- **同步编辑模式**：点预览工具栏的 ✎（或 `⌘⌥E`），预览页面直接可改——点任意段落、标题、
+  列表、表格单元格、提示块正文、代码块、公式块即可就地编辑，改动实时写回 Markdown。
+  `Enter` 拆段、`Tab` 在表格单元格间移动、`Esc` 退出当前块；编辑时不会重排页面，光标不跳。
+- **图片拖入**：把图片拖到预览（或编辑器里的 Markdown 文件），自动在当前文件旁创建
+  `_assets` 目录并复制进去，插入相对路径 `![](./_assets/xxx.png)`；重名自动加 `-1` 后缀。
 - 内置预览（VS Code 默认预览）也会被美化，无需安装额外主题。
 - 一键导出单文件 HTML，图片自动内嵌为 base64，方便分享。
 
@@ -147,13 +189,21 @@ insert a callout, table, diagram, math block or fenced code block.
 ```bash
 npm install
 npm run build          # bundle extension + webview, copy fonts & mermaid
+npm run watch          # rebuild on change
 npm run typecheck
+npm test               # typecheck + build + serialiser + extension-host suites
+npm run test:browser   # headless-Chrome live editing session
 npx vsce package       # build the .vsix
 ```
 
+Press <kbd>F5</kbd> to launch the Extension Development Host: the *Run Buity Markdown (extension host)*
+target builds first and opens `examples/showcase.md`; the *watch* target keeps rebuilding while you
+edit `src/` and `webview/`.
+
 Source layout: `src/engine.ts` (markdown-it pipeline + sanitising), `src/preview.ts`
-(webview panel and sync), `src/format.ts` (editor commands), `src/export.ts`,
-`webview/main.ts` (preview client), `media/buity.css` (the design system).
+(webview panel and sync), `src/assets.ts` + `src/drop.ts` (image assets and drag & drop),
+`src/format.ts` (editor commands), `src/export.ts`, `webview/main.ts` (preview client),
+`webview/editor.ts` + `webview/serialize.ts` (live editing), `media/buity.css` (the design system).
 
 ## License
 

@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Buity Markdown (extension host)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/examples/showcase.md"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "buity: build",
+      "presentation": { "group": "1_dev", "order": 1 }
+    },
+    {
+      "name": "Run Buity Markdown (empty window)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "buity: build",
+      "presentation": { "group": "1_dev", "order": 2 }
+    },
+    {
+      "name": "Run Buity Markdown (watch, auto-open preview)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/examples/showcase.md"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "env": { "BUITY_SMOKE": "1" },
+      "preLaunchTask": "buity: watch",
+      "presentation": { "group": "1_dev", "order": 3 }
+    },
+    {
+      "name": "Run Buity Markdown (no build, fast restart)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/examples/showcase.md"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "presentation": { "group": "1_dev", "order": 4 }
+    }
+  ]
+}

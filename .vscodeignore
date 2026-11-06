@@ -5,8 +5,8 @@ webview/**
 scripts/**
 node_modules/**
 out/**
-dist/smoke.cjs
-dist/engine-test.cjs
+dist/*.cjs
+dist/*-test.cjs
 *.map
 *.ts
 !media/**/*.js

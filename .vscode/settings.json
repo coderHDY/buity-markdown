@@ -1,0 +1,18 @@
+{
+  "files.exclude": {
+    "dist": false,
+    "media/vendor": true,
+    "media/fonts": true,
+    "media/katex.css": true,
+    "media/webview.js": true
+  },
+  "search.exclude": {
+    "dist": true,
+    "node_modules": true,
+    "media/vendor": true,
+    "media/fonts": true,
+    "*.vsix": true
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "editor.formatOnSave": true
+}
