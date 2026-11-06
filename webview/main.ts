@@ -196,6 +196,20 @@ function scheduleDiagrams(force = false) {
   diagramTimer = window.setTimeout(() => void renderDiagrams(force), force ? 0 : 240);
 }
 
+let diagramAckSent = false;
+
+/** One-shot diagnostic: confirms the bundled diagram engine actually ran. */
+function scheduleDiagramAck() {
+  if (diagramAckSent) return;
+  window.setTimeout(() => {
+    if (diagramAckSent) return;
+    const svg = el.article.querySelectorAll('.bm-diagram svg').length;
+    if (!svg) return;
+    diagramAckSent = true;
+    vscode.postMessage({ type: 'rendered', nodes: 0, headings: 0, katex: 0, diagrams: svg });
+  }, 1600);
+}
+
 function renderToc(headings: Heading[]) {
   el.toc.innerHTML = '';
   if (!headings.length) {
@@ -277,6 +291,7 @@ function applyUpdate(message: any) {
   }
 
   scheduleDiagrams();
+  scheduleDiagramAck();
   syncToc();
   updateProgress();
 }
@@ -377,27 +392,38 @@ el.topBtn.addEventListener('click', () => el.main.scrollTo({ top: 0, behavior: '
 
 window.addEventListener('message', (event) => {
   const message = event.data;
-  switch (message.type) {
-    case 'init':
-      themeKind = message.themeKind;
-      mermaidUri = message.mermaidUri || '';
-      config = { ...config, ...message.config };
-      applyConfig();
-      break;
-    case 'update':
-      applyUpdate(message);
-      break;
-    case 'config':
-      themeKind = message.themeKind || themeKind;
-      config = { ...config, ...message.config };
-      applyConfig();
-      if (message.redrawDiagrams) renderDiagrams(true);
-      break;
-    case 'scrollTo':
-      scrollToLine(message.line, false);
-      syncToc();
-      updateProgress();
-      break;
+  try {
+    switch (message.type) {
+      case 'init':
+        themeKind = message.themeKind;
+        mermaidUri = message.mermaidUri || '';
+        config = { ...config, ...message.config };
+        applyConfig();
+        break;
+      case 'update':
+        applyUpdate(message);
+        vscode.postMessage({
+          type: 'rendered',
+          nodes: el.article.querySelectorAll('*').length,
+          katex: el.article.querySelectorAll('.katex').length,
+          diagrams: el.article.querySelectorAll('.bm-diagram svg').length,
+          headings: (message.headings || []).length,
+        });
+        break;
+      case 'config':
+        themeKind = message.themeKind || themeKind;
+        config = { ...config, ...message.config };
+        applyConfig();
+        if (message.redrawDiagrams) renderDiagrams(true);
+        break;
+      case 'scrollTo':
+        scrollToLine(message.line, false);
+        syncToc();
+        updateProgress();
+        break;
+    }
+  } catch (error) {
+    vscode.postMessage({ type: 'error', message: error instanceof Error ? error.stack || error.message : String(error) });
   }
 });
 

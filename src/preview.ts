@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { createEngine, Engine, RenderResult } from './engine';
 import { BuityConfig, readConfig, themeKind } from './config';
+import { log } from './log';
 
 function nonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -22,6 +23,8 @@ export class BuityPreview {
   private engine: Engine;
   private ready = false;
   private disposed = false;
+  private loggedRender = false;
+  private loggedDiagrams = false;
   private renderTimer: NodeJS.Timeout | undefined;
   private lastOutgoingScroll = 0;
   private lastIncomingScroll = 0;
@@ -67,6 +70,7 @@ export class BuityPreview {
     );
     this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icon.png');
     this.panel.webview.html = this.buildHtml();
+    log().info(`preview panel created for ${document.uri.toString()}`);
 
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((message) => void this.onMessage(message), null, this.disposables);
@@ -138,21 +142,25 @@ export class BuityPreview {
 
   private render() {
     if (!this.ready) return;
-    const result = this.engine.render(this.document.getText());
-    this.lastResult = result;
-    this.panel.title = `Preview  ·  ${this.document.uri.path.split('/').pop()}`;
-    void this.panel.webview.postMessage({
-      type: 'update',
-      html: result.html,
-      headings: result.headings,
-      hasDiagram: result.hasDiagram,
-      stats: {
-        words: result.words,
-        chars: result.chars,
-        readingMinutes: this.config.readingTime ? result.readingMinutes : 0,
-      },
-      title: this.document.uri.path.split('/').pop() || 'Preview',
-    });
+    try {
+      const result = this.engine.render(this.document.getText());
+      this.lastResult = result;
+      this.panel.title = `Preview  ·  ${this.document.uri.path.split('/').pop()}`;
+      void this.panel.webview.postMessage({
+        type: 'update',
+        html: result.html,
+        headings: result.headings,
+        hasDiagram: result.hasDiagram,
+        stats: {
+          words: result.words,
+          chars: result.chars,
+          readingMinutes: this.config.readingTime ? result.readingMinutes : 0,
+        },
+        title: this.document.uri.path.split('/').pop() || 'Preview',
+      });
+    } catch (error) {
+      log().error(`render failed: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+    }
   }
 
   /* -------------------------------------------------------------- messages */
@@ -161,6 +169,7 @@ export class BuityPreview {
     switch (message?.type) {
       case 'ready':
         this.ready = true;
+        log().info('webview ready');
         await this.panel.webview.postMessage({
           type: 'init',
           config: this.config,
@@ -194,6 +203,24 @@ export class BuityPreview {
 
       case 'setConfig':
         await this.persistConfig(message.patch || {});
+        break;
+
+      case 'rendered':
+        if (message.nodes === 0) {
+          if (!this.loggedDiagrams && message.diagrams > 0) {
+            this.loggedDiagrams = true;
+            log().info(`diagram engine ok: ${message.diagrams} diagram(s) rendered`);
+          }
+        } else if (!this.loggedRender) {
+          this.loggedRender = true;
+          log().info(
+            `rendered: ${message.nodes} nodes, ${message.headings} headings, ${message.katex} math, ${message.diagrams} diagrams`,
+          );
+        }
+        break;
+
+      case 'error':
+        log().error(`webview error: ${String(message.message).slice(0, 800)}`);
         break;
     }
   }

@@ -3,6 +3,7 @@ import { BuityPreview } from './preview';
 import { countText, extendMarkdownIt } from './engine';
 import { exportHtml } from './export';
 import { readConfig, themeKind } from './config';
+import { log } from './log';
 import * as format from './format';
 
 function activeMarkdownDocument(): vscode.TextDocument | undefined {
@@ -21,11 +22,13 @@ function showPreview(context: vscode.ExtensionContext, column: vscode.ViewColumn
 }
 
 export function activate(context: vscode.ExtensionContext): { extendMarkdownIt(md: any): any } {
+  const version = context.extension?.packageJSON?.version ?? '0.1.0';
+  log().info(`Buity Markdown ${version} activated`);
+
   const register = (id: string, handler: (...args: any[]) => any) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, handler));
 
-  register('buityMarkdown.openPreview', () => showPreview(context, vscode.ViewColumn.Beside));
-  register('buityMarkdown.openPreviewToSide', () => showPreview(context, vscode.ViewColumn.Beside));
+  register('buityMarkdown.openPreview', () => showPreview(context, vscode.ViewColumn.Beside));  register('buityMarkdown.openPreviewToSide', () => showPreview(context, vscode.ViewColumn.Beside));
   register('buityMarkdown.exportHtml', (uri?: vscode.Uri) => exportHtml(context, uri instanceof vscode.Uri ? uri : undefined));
 
   register('buityMarkdown.toggleBold', format.toggleBold);

@@ -66,8 +66,8 @@ GitHub alerts work too:
   - A nested detail
   - One more nested detail
 - [x] Ship a first version
-- [ ] Write the remaining chapters
-- [ ] Record a short demo
+- [x] Write the remaining chapters
+- [x] Record a short demo
 
 1. Ordered lists keep tabular numbers
 2. So the digits line up
