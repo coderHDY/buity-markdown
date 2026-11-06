@@ -2,7 +2,7 @@
   "name": "buity-markdown",
   "displayName": "Buity Markdown",
   "description": "A beautiful markdown editor & live preview — editorial typography, callouts, math, diagrams, outline navigation and one-click export.",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "publisher": "buity",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -30,21 +30,32 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onLanguage:markdown",
+    "onCommand:buityMarkdown.openPreview",
+    "onCommand:buityMarkdown.openPreviewToSide",
+    "onCommand:buityMarkdown.toggleLiveEdit",
+    "onCommand:buityMarkdown.attachImage",
+    "onCommand:buityMarkdown.exportHtml",
     "onWebviewPanel:buityMarkdown.preview"
   ],
   "contributes": {
     "commands": [
       {
         "command": "buityMarkdown.openPreview",
-        "title": "Open Preview",
+        "title": "Open Buity Preview",
         "category": "Buity Markdown",
-        "icon": "$(open-preview)"
+        "icon": {
+          "light": "./media/preview-inplace-light.svg",
+          "dark": "./media/preview-inplace-dark.svg"
+        }
       },
       {
         "command": "buityMarkdown.openPreviewToSide",
-        "title": "Open Preview to the Side",
+        "title": "Open Buity Preview to the Side",
         "category": "Buity Markdown",
-        "icon": "$(preview)"
+        "icon": {
+          "light": "./media/preview-side-light.svg",
+          "dark": "./media/preview-side-dark.svg"
+        }
       },
       {
         "command": "buityMarkdown.exportHtml",
@@ -138,18 +149,35 @@
         "when": "editorLangId == markdown"
       },
       {
-        "command": "buityMarkdown.exportHtml",
+        "command": "buityMarkdown.toggleLiveEdit",
         "key": "ctrl+alt+e",
         "mac": "cmd+alt+e",
+        "when": "editorLangId == markdown"
+      },
+      {
+        "command": "buityMarkdown.attachImage",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "when": "editorLangId == markdown"
+      },
+      {
+        "command": "buityMarkdown.exportHtml",
+        "key": "ctrl+alt+h",
+        "mac": "cmd+alt+h",
         "when": "editorLangId == markdown"
       }
     ],
     "menus": {
       "editor/title": [
         {
+          "command": "buityMarkdown.openPreview",
+          "when": "editorLangId == markdown",
+          "group": "navigation@3"
+        },
+        {
           "command": "buityMarkdown.openPreviewToSide",
           "when": "editorLangId == markdown",
-          "group": "navigation"
+          "group": "navigation@4"
         },
         {
           "command": "buityMarkdown.exportHtml",
@@ -311,18 +339,5 @@
     "jsdom": "^31.0.0",
     "mermaid": "^11.4.1",
     "typescript": "^5.7.2"
-  },
-  "keybindings": [
-    {
-      "command": "buityMarkdown.toggleLiveEdit",
-      "key": "ctrl+alt+e",
-      "mac": "cmd+alt+e"
-    },
-    {
-      "command": "buityMarkdown.attachImage",
-      "key": "ctrl+alt+i",
-      "mac": "cmd+alt+i",
-      "when": "editorLangId == markdown"
-    }
-  ]
+  }
 }

@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.2.2 — 2026-11-06
+
+Title-bar buttons were invisible or dead-clicking. Three separate causes, all fixed:
+
+- **Icons were painted as raw `background-image` with no theme tinting.** A path-based command
+  icon is not recoloured by VS Code (unlike a codicon), so the black-on-black 0.2.1 artwork
+  disappeared on dark title bars and looked like the Buity button had been removed. Both buttons
+  now ship proper light/dark artwork (`media/preview-inplace-*.svg`, `media/preview-side-*.svg`)
+  and the designs are distinguishable at 16 px: single page = in place, page + pane = to the side.
+- **"Open Buity Preview" opened beside instead of in the current column.** It now targets
+  `ViewColumn.Active`, so the title bar has two genuinely different actions again.
+- **Title-bar clicks are now argument-aware.** A tab's button passes the tab URI and may run with
+  no `activeTextEditor`; the command resolves the document from that URI (falling back to the
+  active editor, then to any visible Markdown editor) instead of silently bailing out.
+  Command failures are surfaced through an error notification and the log rather than dying quietly.
+- **`package.json` had a stray top-level `keybindings` block** (schema violation) which shadowed the
+  real one: `⌘⌥E` ran *Export HTML* instead of *Toggle Live Edit*. The manifest is clean again and
+  the shortcuts are: `⌘K B` side preview, `⌘⌥E` live edit, `⌘⌥I` insert image, `⌘⌥H` export HTML.
+- Both preview commands are contributed to `editor/title` and `activationEvents` now lists every
+  command, so a window reload cannot leave the buttons unregistered.
+
+## 0.2.1 — 2026-11-06
+
+- New Buity icon: the editor title-bar button and the preview panel tab now use a page-with-accent-rule
+  mark instead of the generic `$(preview)` codicon (which is what VS Code's own "Open as Preview" uses),
+  so the Buity entry is no longer mistaken for the built-in one. The panel tab icon has light/dark
+  variants.
+- The title-bar button is placed after the built-in Markdown preview buttons (`navigation@3`).
+
 ## 0.2.0 — 2026-11-06
 
 Live editing, image assets and a first-class development loop.

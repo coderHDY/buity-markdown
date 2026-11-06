@@ -140,8 +140,11 @@ Mermaid is bundled and loaded lazily, only when a document actually contains a d
 
 | Command | Default shortcut |
 | --- | --- |
-| Open Preview to the Side | <kbd>⌘</kbd><kbd>K</kbd> <kbd>B</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> <kbd>B</kbd> |
-| Export as Standalone HTML | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>E</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>E</kbd> |
+| Open Buity Preview (in the current column) | – (title bar button) |
+| Open Buity Preview to the Side | <kbd>⌘</kbd><kbd>K</kbd> <kbd>B</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> <kbd>B</kbd> |
+| Toggle Live Edit Mode | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>E</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>E</kbd> |
+| Insert Image… | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>I</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>I</kbd> |
+| Export as Standalone HTML | <kbd>⌘</kbd><kbd>⌥</kbd><kbd>H</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>H</kbd> |
 
 Plus formatting commands in the palette and the editor context menu: toggle bold / italic /
 strikethrough / inline code / highlight, insert or remove a link, cycle heading level,
@@ -172,7 +175,7 @@ insert a callout, table, diagram, math block or fenced code block.
 
 **Buity Markdown** 是一个「好看优先」的 Markdown 编辑与实时预览插件：
 
-- `⌘K B` 打开侧边实时预览，自带大纲、阅读进度、双向滚动同步。
+- 标题栏两个 Buity 按钮：**原地预览**（占用当前编辑区）和**侧边预览**（`⌘K B`），自带大纲、阅读进度、双向滚动同步。
 - 三套配色（跟随主题 / 暖纸 / 深夜），可调字号、行高与正文宽度。
 - 支持 `:::` 提示块、GitHub 风格 `> [!NOTE]`、KaTeX 公式、Mermaid 图表、代码复制按钮、
   可勾选的任务清单（会直接写回源文件）。

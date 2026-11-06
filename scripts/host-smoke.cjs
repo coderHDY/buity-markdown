@@ -161,12 +161,14 @@ const panel = {
   title: '',
   iconPath: undefined,
   onDidDispose: () => ({ dispose() {} }),
-  reveal() {},
+  reveal: (viewColumn) => panelCalls.push({ kind: 'reveal', viewColumn }),
   dispose() {},
 };
 
-const commands = new Map();
-const dropProviders = [];
+  const commands = new Map();
+  const dropProviders = [];
+  const panelCalls = [];
+  const openedUris = [];
 const settings = {
   'buityMarkdown.theme': 'auto',
   'buityMarkdown.fontSize': 16,
@@ -228,7 +230,10 @@ const vscode = {
     activeTextEditor: editor,
     visibleTextEditors: [editor],
     activeColorTheme: { kind: 2 },
-    createWebviewPanel: () => panel,
+    createWebviewPanel: (viewType, title, viewColumn) => {
+      panelCalls.push({ kind: 'create', viewColumn });
+      return panel;
+    },
     createOutputChannel: () => ({
       info: (...args) => console.log('[log:info]', ...args),
       warn: () => {},
@@ -269,7 +274,10 @@ const vscode = {
     onDidChangeTextDocument: () => ({ dispose() {} }),
     onDidChangeConfiguration: () => ({ dispose() {} }),
     onDidCloseTextDocument: () => ({ dispose() {} }),
-    openTextDocument: () => Promise.resolve(document),
+    openTextDocument: (uri) => {
+      openedUris.push(uri);
+      return Promise.resolve(document);
+    },
     applyEdit: (edit) => {
       appliedEdits.push(edit);
       for (const op of edit.ops) applyTextEdit(op.range, op.text);
@@ -458,6 +466,38 @@ async function waitFor(predicate, timeout = 2000) {
   for (const handler of messages) await handler({ type: 'setConfig', patch: { theme: 'paper', liveEdit: true } });
   await waitFor(() => settings['buityMarkdown.theme'] === 'paper' && settings['buityMarkdown.liveEdit'] === true);
   check(settings['buityMarkdown.theme'] === 'paper' && settings['buityMarkdown.liveEdit'] === true, 'config changes persisted');
+
+  /* ------------------------------------------- title bar button behaviour */
+
+  check(panelCalls.length > 0, 'preview panel was requested');
+  check(
+    panelCalls.every((call) => call.viewColumn === vscode.ViewColumn.Beside),
+    'openPreviewToSide targets the Beside column',
+    JSON.stringify(panelCalls),
+  );
+
+  // "Open Preview" must take over the active column, not open beside it.
+  panelCalls.length = 0;
+  await commands.get('buityMarkdown.openPreview')();
+  check(
+    panelCalls.length > 0 && panelCalls.every((call) => call.viewColumn === vscode.ViewColumn.Active),
+    'openPreview targets the active column',
+    JSON.stringify(panelCalls),
+  );
+
+  // A title-bar click passes the tab's URI and may find no active text editor.
+  panelCalls.length = 0;
+  openedUris.length = 0;
+  const savedEditor = vscode.window.activeTextEditor;
+  const savedVisible = vscode.window.visibleTextEditors;
+  vscode.window.activeTextEditor = undefined;
+  vscode.window.visibleTextEditors = [];
+  const titleBarUri = vscode.Uri.file('/tmp/from-title-bar.md');
+  await commands.get('buityMarkdown.openPreviewToSide')(titleBarUri);
+  check(openedUris.some((uri) => uri && uri.path === titleBarUri.path), 'title bar URI is resolved into a document');
+  check(panelCalls.length > 0, 'title bar click still opens a preview without an active editor');
+  vscode.window.activeTextEditor = savedEditor;
+  vscode.window.visibleTextEditors = savedVisible;
 
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 

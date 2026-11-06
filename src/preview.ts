@@ -69,7 +69,10 @@ export class BuityPreview {
         ],
       },
     );
-    this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icon.png');
+    this.panel.iconPath = {
+      light: vscode.Uri.joinPath(context.extensionUri, 'media', 'panel-icon-light.svg'),
+      dark: vscode.Uri.joinPath(context.extensionUri, 'media', 'panel-icon-dark.svg'),
+    };
     this.panel.webview.html = this.buildHtml();
     log().info(`preview panel created for ${document.uri.toString()}`);
 

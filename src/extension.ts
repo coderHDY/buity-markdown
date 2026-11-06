@@ -13,8 +13,43 @@ function activeMarkdownDocument(): vscode.TextDocument | undefined {
   return editor.document.languageId === 'markdown' ? editor.document : undefined;
 }
 
-function showPreview(context: vscode.ExtensionContext, column: vscode.ViewColumn) {
-  const document = activeMarkdownDocument();
+/** Duck-typed URI check: satisfies both VS Code and lightweight test hosts. */
+function asUri(value: unknown): vscode.Uri | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as vscode.Uri;
+  return typeof candidate.scheme === 'string' && typeof candidate.path === 'string' ? candidate : undefined;
+}
+
+/**
+ * Resolve which markdown document a command should act on.
+ *
+ * Title-bar buttons invoke commands with the URI of the tab they sit on, and by
+ * the time the handler runs `window.activeTextEditor` may be undefined (e.g. the
+ * preview webview or the panel has focus). So the passed URI wins, then the
+ * active editor, then any visible markdown editor.
+ */
+async function documentFor(passed?: unknown): Promise<vscode.TextDocument | undefined> {
+  const uri = asUri(passed);
+  if (uri) {
+    try {
+      const document = await vscode.workspace.openTextDocument(uri);
+      if (document.languageId === 'markdown' || /\.(md|markdown|mdown|mkd|mdx)$/i.test(document.uri.fsPath)) {
+        return document;
+      }
+    } catch {
+      /* not a file we can open as text — fall through */
+    }
+  }
+
+  const active = activeMarkdownDocument();
+  if (active) return active;
+
+  const visible = vscode.window.visibleTextEditors.find((editor) => editor.document.languageId === 'markdown');
+  return visible?.document;
+}
+
+async function showPreview(context: vscode.ExtensionContext, column: vscode.ViewColumn, uri?: unknown) {
+  const document = await documentFor(uri);
   if (!document) {
     void vscode.window.showInformationMessage('Buity Markdown: open a markdown file to preview it.');
     return;
@@ -27,11 +62,22 @@ export function activate(context: vscode.ExtensionContext): { extendMarkdownIt(m
   log().info(`Buity Markdown ${version} activated`);
 
   const register = (id: string, handler: (...args: any[]) => any) =>
-    context.subscriptions.push(vscode.commands.registerCommand(id, handler));
+    context.subscriptions.push(
+      vscode.commands.registerCommand(id, async (...args: any[]) => {
+        try {
+          return await handler(...args);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          log().error(`command ${id} failed: ${error instanceof Error ? error.stack ?? message : message}`);
+          void vscode.window.showErrorMessage(`Buity Markdown: ${message}`);
+          throw error;
+        }
+      }),
+    );
 
-  register('buityMarkdown.openPreview', () => showPreview(context, vscode.ViewColumn.Beside));
-  register('buityMarkdown.openPreviewToSide', () => showPreview(context, vscode.ViewColumn.Beside));
-  register('buityMarkdown.exportHtml', (uri?: vscode.Uri) => exportHtml(context, uri instanceof vscode.Uri ? uri : undefined));
+  register('buityMarkdown.openPreview', (uri?: vscode.Uri) => showPreview(context, vscode.ViewColumn.Active, uri));
+  register('buityMarkdown.openPreviewToSide', (uri?: vscode.Uri) => showPreview(context, vscode.ViewColumn.Beside, uri));
+  register('buityMarkdown.exportHtml', (uri?: vscode.Uri) => exportHtml(context, asUri(uri)));
   register('buityMarkdown.attachImage', () => attachImageCommand());
   register('buityMarkdown.toggleLiveEdit', async () => {
     const config = vscode.workspace.getConfiguration('buityMarkdown');
