@@ -53,7 +53,7 @@ notes/
     diagram.png
 ```
 
-and your file gets `![diagram](./_assets/diagram.png)`. Duplicate file names are suffixed
+and your file gets an image reference to `./_assets/diagram.png`. Duplicate file names are suffixed
 (`diagram-1.png`) instead of overwritten. Pasting an image works the same way, and
 **Buity Markdown: Insert Image…** (<kbd>⌘</kbd><kbd>⌥</kbd><kbd>I</kbd>) does it from disk.
 Set `buityMarkdown.imageFolder` to use another folder name.
@@ -183,7 +183,7 @@ insert a callout, table, diagram, math block or fenced code block.
   列表、表格单元格、提示块正文、代码块、公式块即可就地编辑，改动实时写回 Markdown。
   `Enter` 拆段、`Tab` 在表格单元格间移动、`Esc` 退出当前块；编辑时不会重排页面，光标不跳。
 - **图片拖入**：把图片拖到预览（或编辑器里的 Markdown 文件），自动在当前文件旁创建
-  `_assets` 目录并复制进去，插入相对路径 `![](./_assets/xxx.png)`；重名自动加 `-1` 后缀。
+  `_assets` 目录并复制进去，插入相对路径引用；重名自动加 `-1` 后缀。
 - 内置预览（VS Code 默认预览）也会被美化，无需安装额外主题。
 - 一键导出单文件 HTML，图片自动内嵌为 base64，方便分享。
 

@@ -318,7 +318,10 @@
     "test:host": "node scripts/host-smoke.cjs",
     "test:browser": "node scripts/cdp-test.mjs",
     "test": "npm run typecheck && npm run build && npm run test:serialize && npm run test:host",
-    "package": "vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/buity/buity-markdown/main"
+    "package": "vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/coderHDY/buity-markdown/main",
+    "publish:marketplace": "vsce publish --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/coderHDY/buity-markdown/main",
+    "publish:vsix": "npm run package",
+    "publish:openvsx": "ovsx publish buity-markdown-$npm_package_version.vsix -p $OVSX_PAT"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
@@ -339,5 +342,16 @@
     "jsdom": "^31.0.0",
     "mermaid": "^11.4.1",
     "typescript": "^5.7.2"
+  },
+  "author": {
+    "name": "coderHDY"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/coderHDY/buity-markdown.git"
+  },
+  "homepage": "https://github.com/coderHDY/buity-markdown#readme",
+  "bugs": {
+    "url": "https://github.com/coderHDY/buity-markdown/issues"
   }
 }
